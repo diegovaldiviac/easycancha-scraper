@@ -12,11 +12,12 @@ Required .env keys:
 """
 
 import os
+import re
 import time as _time
 from datetime import date, timedelta
 
 from dotenv import load_dotenv
-from playwright.sync_api import Page, TimeoutError as PWT
+from playwright.sync_api import Page
 
 from services.logger import logger
 
@@ -31,14 +32,10 @@ _WEEKDAYS = {
     "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
 }
 
-# Short Spanish day abbreviations as rendered in easycancha's date strip
 _ES_SHORT = {
     0: "LUN.", 1: "MAR.", 2: "MIÉ.", 3: "JUE.",
     4: "VIE.", 5: "SÁB.", 6: "DOM.",
 }
-
-
-# ── public API ─────────────────────────────────────────────────────────────────
 
 def next_target_date() -> date:
     """Return the next calendar date that matches TARGET_DAY."""
@@ -73,6 +70,7 @@ def book(page: Page, target: date) -> None:
 # ── internal steps ─────────────────────────────────────────────────────────────
 
 def _select_date(page: Page, target: date) -> None:
+    """Click the target date in the easycancha calendar strip, advancing weeks if needed."""
     day_num = target.day
     day_es  = _ES_SHORT[target.weekday()]   # e.g. "SÁB."
     logger.info(f"Selecting date — {day_num} {day_es} ({target})")
@@ -82,7 +80,7 @@ def _select_date(page: Page, target: date) -> None:
             try:
                 num = d.locator(".cds-day-number").inner_text().strip()
                 txt = d.locator(".cds-day-text").inner_text().strip().upper()
-                if str(day_num) == num and day_es.upper() in txt:
+                if int(num) == day_num and day_es.upper() in txt:
                     d.click()
                     _time.sleep(1.5)
                     logger.info(f"Date selected: {num} {txt}")
@@ -96,7 +94,10 @@ def _select_date(page: Page, target: date) -> None:
 
     # Advance through calendar weeks until the target date appears (up to 4 weeks)
     for _ in range(4):
-        page.locator("[ng-click='next()']").click()
+        btn = page.locator("[ng-click='next()']").first
+        if btn.get_attribute("disabled") is not None:
+            break
+        btn.click()
         _time.sleep(1)
         if _try_click():
             return
@@ -105,6 +106,7 @@ def _select_date(page: Page, target: date) -> None:
 
 
 def _select_time(page: Page) -> None:
+    """Click the TARGET_HOUR slot in the hour strip. Raises RuntimeError if the slot isn't shown."""
     logger.info(f"Selecting time slot {_TARGET_HOUR}")
     _time.sleep(1)
 
@@ -126,6 +128,7 @@ def _select_time(page: Page) -> None:
 
 
 def _click_siguiente(page: Page) -> None:
+    """Submit the date/time filter to load the available courts list."""
     logger.info("Clicking Siguiente")
     page.locator("[ng-click='processFilters()']").click()
     page.wait_for_load_state("networkidle")
@@ -133,43 +136,41 @@ def _click_siguiente(page: Page) -> None:
 
 
 def _select_court(page: Page) -> None:
+    """Parse available courts, sort by court number, and select the lowest-numbered one."""
     logger.info("Selecting court")
     courts = page.locator("[ng-click*='preBookAndSelectCourtV2']").all()
 
     if not courts:
         raise RuntimeError("No courts found — check that the slot is still available")
 
+    court_data = []
     for c in courts:
         try:
-            logger.info(f"  Available: {c.inner_text().strip().replace(chr(10), ' ')}")
+            txt = c.inner_text().strip().replace("\n", " ")
+            nums = re.findall(r'\d+', txt)
+            court_num = int(nums[0]) if nums else 999
+            court_data.append((court_num, txt, c))
+            logger.info(f"  Available: [{court_num}] {txt}")
         except Exception:
             pass
 
-    courts[0].click()
-    page.wait_for_load_state("networkidle")
-    _time.sleep(1.5)
-    logger.info("Court selected")
+    if not court_data:
+        raise RuntimeError("Could not parse any courts from the page")
 
+    court_data.sort(key=lambda x: x[0])
+    lowest_num, lowest_txt, lowest_el = court_data[0]
+    logger.info(f"Selecting lowest court: [{lowest_num}] {lowest_txt}")
+    lowest_el.click()
+    page.wait_for_url("**/book/slots**", timeout=15_000)
+    page.wait_for_load_state("networkidle")
+    _time.sleep(2)
+    logger.info(f"Court selected — {page.url}")
 
 def _confirm(page: Page) -> None:
-    logger.info("Looking for confirmation button")
-
-    for selector in (
-        'button:has-text("Confirmar")',
-        'button:has-text("Reservar")',
-        'button:has-text("Pagar")',
-        '[ng-click*="confirm"]',
-        '[ng-click*="pagar"]',
-        '[ng-click*="pay"]',
-    ):
-        try:
-            btn = page.locator(selector).first
-            if btn.is_visible(timeout=3_000):
-                btn.click()
-                page.wait_for_load_state("networkidle")
-                logger.info("Booking confirmed!")
-                return
-        except PWT:
-            continue
-
-    logger.warning("No confirm button found — the last step may need a manual selector update")
+    """Click 'RESERVAR Y PAGAR MÁS TARDE' to finalise the booking without upfront payment."""
+    logger.info("Clicking 'RESERVAR Y PAGAR MÁS TARDE'")
+    btn = page.locator(".reserva_btn_terceary").first
+    btn.wait_for(state="visible", timeout=20_000)
+    btn.click()
+    page.wait_for_load_state("networkidle")
+    logger.info(f"Booking confirmed — {page.url}")

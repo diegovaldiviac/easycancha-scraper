@@ -32,6 +32,7 @@ def login(page: Page) -> None:
 
 
 def _submit_credentials(page: Page) -> None:
+    """Type credentials and click login, then assert the redirect to /book/."""
     # AngularJS ng-model bindings require real keystrokes — page.fill() won't trigger them
     email_input = page.locator('input[type="email"]')
     email_input.click()

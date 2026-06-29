@@ -8,7 +8,6 @@ from services.logger import logger
 
 load_dotenv()
 
-# easycancha blocks HeadlessChrome UA at /api/login — spoof a real Chrome.
 _UA = (
     "Mozilla/5.0 (X11; Linux x86_64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -17,6 +16,7 @@ _UA = (
 
 
 def _proxy_config() -> ProxySettings | None:
+    """Build a Playwright ProxySettings dict from .env, or return None if PROXY_SERVER is unset."""
     server = os.getenv("PROXY_SERVER")
     if not server:
         return None
@@ -33,6 +33,11 @@ def _proxy_config() -> ProxySettings | None:
 
 @contextmanager
 def create_browser() -> Page:
+    """Context manager that yields a configured Playwright Page and closes the browser on exit.
+
+    Anti-detection measures applied: spoofed Chrome UA, navigator.webdriver=undefined,
+    country=CL cookie (skips country selector modal), optional residential proxy.
+    """
     proxy = _proxy_config()
 
     with sync_playwright() as p:

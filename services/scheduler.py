@@ -32,6 +32,7 @@ _SCHEDULE = {
 
 
 def _run() -> None:
+    """Execute one full booking cycle: open browser, login, book the next target date."""
     target = next_target_date()
     logger.info(f"Scheduled run — booking {_TARGET_DAY} {target}")
     try:
