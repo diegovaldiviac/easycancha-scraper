@@ -23,11 +23,12 @@ Bot de reserva automática de canchas en [easycancha.com](https://www.easycancha
 ```
 easycancha-scraper/
 ├── services/
-│   ├── auth.py       # Login a easycancha (sesión autenticada)
-│   ├── booking.py    # Lógica de reserva (abstracta, configurable por .env)
-│   ├── browser.py    # Fábrica del navegador Chromium (anti-detección)
-│   └── logger.py     # Logger compartido
-├── main.py           # Punto de entrada — configura y lanza el scheduler
+│   ├── auth.py         # Login a easycancha (sesión autenticada)
+│   ├── booking.py      # Lógica de reserva (abstracta, configurable por .env)
+│   ├── browser.py      # Fábrica del navegador Chromium (anti-detección + proxy)
+│   ├── scheduler.py    # Scheduling — calcula el trigger y ejecuta el loop
+│   └── logger.py       # Logger compartido
+├── main.py             # Punto de entrada — dos líneas
 ├── requirements.txt  # Dependencias de producción
 ├── Dockerfile
 ├── docker-compose.yml
@@ -53,6 +54,12 @@ cp .env.example .env
 | `TARGET_HOUR` | Hora del turno en formato 24h | `11:00` |
 | `BOOKING_ADVANCE_DAYS` | Días de anticipación con que el club abre reservas | `7` |
 | `BOOKING_RELEASE_HOUR` | Hora a la que se liberan los turnos (formato 24h) | `00:00` |
+| `TZ` | Timezone del servidor — el scheduler usa el reloj local del contenedor | `America/Santiago` |
+| `PROXY_SERVER` | Servidor proxy residencial (opcional, recomendado en cloud) | `http://proxy.ejemplo.io:9000` |
+| `PROXY_USERNAME` | Usuario del proxy | `usuario_proxy` |
+| `PROXY_PASSWORD` | Contraseña del proxy | `contrasena_proxy` |
+
+> **Nota sobre `TZ`:** Los servidores cloud (Oracle, AWS, etc.) corren en UTC por defecto. Sin esta variable, `BOOKING_RELEASE_HOUR=00:00` dispararía a medianoche UTC — que en Chile equivale a las 21:00 del día anterior. Siempre define `TZ=America/Santiago`.
 
 ### Cómo encontrar tu BOOKING_URL
 
@@ -100,7 +107,7 @@ python main.py
 Para disparar el scraper una vez sin esperar el scheduler:
 
 ```bash
-python -c "from main import run; run()"
+python -c "from services.scheduler import _run; _run()"
 ```
 
 ---
