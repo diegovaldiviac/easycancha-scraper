@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
@@ -32,7 +33,7 @@ def _proxy_config() -> ProxySettings | None:
 
 
 @contextmanager
-def create_browser() -> Page:
+def create_browser() -> Iterator[Page]:
     """Context manager that yields a configured Playwright Page and closes the browser on exit.
 
     Anti-detection measures applied: spoofed Chrome UA, navigator.webdriver=undefined,
