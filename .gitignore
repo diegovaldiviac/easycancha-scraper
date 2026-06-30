@@ -51,6 +51,8 @@ coverage.xml
 
 # Environments
 .env
+.env.booking*
+!.env.booking*.example
 .venv
 env/
 venv/

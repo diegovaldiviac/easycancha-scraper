@@ -1,8 +1,16 @@
 version: '3'
 
 services:
-  scraper:
+  booking-1:
     build: .
     restart: always
     env_file:
       - .env
+      - .env.booking1
+
+  booking-2:
+    build: .
+    restart: always
+    env_file:
+      - .env
+      - .env.booking2

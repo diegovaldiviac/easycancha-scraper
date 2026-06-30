@@ -39,25 +39,39 @@ easycancha-scraper/
 
 ## Variables de entorno
 
-Copia `.env.example` a `.env` y completa tus datos:
+La configuración está dividida en dos niveles:
+
+- **`.env`** — credenciales y configuración compartida por todas las reservas
+- **`.env.bookingN`** — una reserva específica (club, día, hora). Puedes tener tantos como necesites: `.env.booking1`, `.env.booking2`, etc.
 
 ```bash
 cp .env.example .env
+cp .env.booking1.example .env.booking1
+# Para una segunda reserva:
+cp .env.booking1.example .env.booking2
 ```
+
+### `.env` (compartido)
 
 | Variable | Descripción | Ejemplo |
 |---|---|---|
 | `EMAIL` | Correo de tu cuenta easycancha | `tucorreo@gmail.com` |
 | `PASSWORD` | Contraseña de tu cuenta easycancha | `MiClave123` |
-| `BOOKING_URL` | URL del club y deporte en easycancha (ver abajo) | `https://www.easycancha.com/book/clubs/59/sports/1/filter` |
-| `TARGET_DAY` | Día de la semana en inglés | `Saturday` |
-| `TARGET_HOUR` | Hora del turno en formato 24h | `11:00` |
 | `BOOKING_ADVANCE_DAYS` | Días de anticipación con que el club abre reservas | `7` |
 | `BOOKING_RELEASE_HOUR` | Hora a la que se liberan los turnos (formato 24h) | `00:00` |
 | `TZ` | Timezone del servidor — el scheduler usa el reloj local del contenedor | `America/Santiago` |
+| `SERVER_IP` | IP pública del servidor de deploy (Oracle Cloud u otro VPS) | `146.181.32.152` |
 | `PROXY_SERVER` | Servidor proxy residencial (opcional, recomendado en cloud) | `http://proxy.ejemplo.io:9000` |
 | `PROXY_USERNAME` | Usuario del proxy | `usuario_proxy` |
 | `PROXY_PASSWORD` | Contraseña del proxy | `contrasena_proxy` |
+
+### `.env.bookingN` (por cada reserva)
+
+| Variable | Descripción | Ejemplo |
+|---|---|---|
+| `BOOKING_URL` | URL del club y deporte en easycancha (ver abajo) | `https://www.easycancha.com/book/clubs/59/sports/1/filter` |
+| `TARGET_DAY` | Día de la semana en inglés | `Saturday` |
+| `TARGET_HOUR` | Hora del turno en formato 24h | `11:00` |
 
 > **Nota sobre `TZ`:** Los servidores cloud (Oracle, AWS, etc.) corren en UTC por defecto. Sin esta variable, `BOOKING_RELEASE_HOUR=00:00` dispararía a medianoche UTC — que en Chile equivale a las 21:00 del día anterior. Siempre define `TZ=America/Santiago`.
 
@@ -108,6 +122,41 @@ Para disparar el scraper una vez sin esperar el scheduler:
 
 ```bash
 python -c "from services.scheduler import _run; _run()"
+```
+
+---
+
+## Deploy en Oracle Cloud (script automático)
+
+El script `deploy_oracle.sh` empaqueta el proyecto, lo copia al servidor vía SCP y levanta el contenedor con Podman.
+
+### Primera vez
+
+```bash
+# Dar permisos de ejecución al script (solo se hace una vez)
+chmod +x deploy_oracle.sh
+```
+
+### Configuración previa
+
+Asegúrate de tener `SERVER_IP` definido en tu `.env` local con la IP pública del servidor:
+
+```env
+SERVER_IP=<ip-publica-oracle>
+```
+
+El usuario SSH por defecto en Oracle Linux es `opc`. Tu clave privada debe estar en `~/.ssh/id_rsa` (o la que configuraste al crear la instancia).
+
+### Ejecutar el deploy
+
+```bash
+./deploy_oracle.sh
+```
+
+### Ver logs del contenedor en producción
+
+```bash
+ssh opc@<ip-publica-oracle> "podman logs --tail=20 -f scraper"
 ```
 
 ---
